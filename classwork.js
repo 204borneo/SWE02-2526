@@ -1,10 +1,9 @@
 // Classwork 02 - Bjorni Pasha
 // Currency Exchange using RapidAPI (currency-conversion-and-exchange-rates)
 
-const API_KEY = "a4f0285db0msh4bf275306cb1060p1a5d17jsnfd7b9ceabf7e";
+const API_KEY = "a4f0285db0msh4bf275306cb1060p1a5d17jsnfd7b9ceabf7e"; // 🔑 Replace with your RapidAPI key
 const API_HOST = "currency-conversion-and-exchange-rates.p.rapidapi.com";
 
-// Common currencies to populate the dropdowns
 const currencies = [
   "USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY",
   "SEK", "NOK", "DKK", "NZD", "SGD", "HKD", "KRW", "INR",
@@ -12,7 +11,6 @@ const currencies = [
   "THB", "IDR", "HUF", "CZK", "ILS", "PHP", "MYR", "RON"
 ];
 
-// Populate both dropdowns on page load
 function populateDropdowns() {
   const fromSelect = document.getElementById("from");
   const toSelect = document.getElementById("to");
@@ -22,16 +20,20 @@ function populateDropdowns() {
     toSelect.innerHTML += `<option value="${code}">${code}</option>`;
   });
 
-  // Default: USD -> EUR
   fromSelect.value = "USD";
   toSelect.value = "EUR";
+
+  // Set date input to today by default
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("date").value = today;
+  document.getElementById("date").max = today; // Can't pick future dates
 }
 
-// Main conversion function called on button click
 async function convertCurrency() {
   const amount = parseFloat(document.getElementById("amount").value);
   const from = document.getElementById("from").value;
   const to = document.getElementById("to").value;
+  const selectedDate = document.getElementById("date").value;
 
   const resultDiv = document.getElementById("result");
   const errorDiv = document.getElementById("error");
@@ -42,7 +44,6 @@ async function convertCurrency() {
   resultDiv.style.display = "none";
   errorDiv.style.display = "none";
 
-  // Validate input
   if (!amount || amount <= 0) {
     errorDiv.textContent = "Please enter a valid amount greater than 0.";
     errorDiv.style.display = "block";
@@ -56,12 +57,22 @@ async function convertCurrency() {
     return;
   }
 
-  // Show loading state
   spinner.style.display = "block";
   btn.disabled = true;
 
   try {
-    const url = `https://${API_HOST}/convert?from=${from}&to=${to}&amount=${amount}`;
+    const today = new Date().toISOString().split("T")[0];
+    const isToday = selectedDate === today;
+
+    let url;
+
+    if (isToday) {
+      // Live conversion endpoint
+      url = `https://${API_HOST}/convert?from=${from}&to=${to}&amount=${amount}`;
+    } else {
+      // Historical rates endpoint
+      url = `https://${API_HOST}/${selectedDate}?base=${from}&symbols=${to}`;
+    }
 
     const response = await fetch(url, {
       method: "GET",
@@ -77,15 +88,22 @@ async function convertCurrency() {
 
     const data = await response.json();
 
-    if (!data.result && data.result !== 0) {
-      throw new Error("Unexpected API response. Check your API key.");
+    let convertedAmount, rate;
+
+    if (isToday) {
+      if (data.result === undefined) throw new Error("Unexpected response. Check your API key.");
+      convertedAmount = data.result.toFixed(2);
+      rate = (data.result / amount).toFixed(6);
+    } else {
+      if (!data.rates || !data.rates[to]) throw new Error("No historical data for this date/currency.");
+      rate = data.rates[to].toFixed(6);
+      convertedAmount = (amount * data.rates[to]).toFixed(2);
     }
 
-    const convertedAmount = data.result.toFixed(2);
-    const rate = (data.result / amount).toFixed(6);
+    const dateLabel = isToday ? "Live rate" : `Rate on ${selectedDate}`;
 
     document.getElementById("outputAmount").textContent = `${convertedAmount} ${to}`;
-    document.getElementById("rateInfo").textContent = `1 ${from} = ${rate} ${to}  •  Amount: ${amount} ${from}`;
+    document.getElementById("rateInfo").textContent = `1 ${from} = ${rate} ${to}  •  ${dateLabel}  •  Amount: ${amount} ${from}`;
     resultDiv.style.display = "block";
 
   } catch (err) {
@@ -97,7 +115,6 @@ async function convertCurrency() {
   }
 }
 
-// Allow pressing Enter in the amount field to trigger conversion
 document.addEventListener("DOMContentLoaded", () => {
   populateDropdowns();
 
